@@ -1,0 +1,58 @@
+#!/bin/bash
+SCRIPTSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+. $SCRIPTSDIR/id
+. $SCRIPTSDIR/common
+
+cd $HOMEDIR
+date
+echo $UUID
+
+(
+mkdir /dev/binderfs/
+mount binder -t binder /dev/binderfs/
+ln -s /dev/binderfs/binder /dev/binder
+
+(
+cd $SCRIPTSDIR/../build/AAServer/
+date
+width=800
+height=480
+framerate="30/1"
+CONTROL_PIPE=/tmp/aacs_feed1
+SHMSIZE=`echo "$width * $height * 4 * 22"|bc`
+SHMSINK="shmsink wait-for-connection=0 sync=true shm-size=$SHMSIZE socket-path=$CONTROL_PIPE"
+MIXERFORMAT="video/x-raw, format=BGRA, pixel-aspect-ratio=1/1, interlace-mode=progressive, framerate=$framerate, width=$width, height=$height"
+CONVERT="videoconvert ! videorate ! videoscale ! videoconvert"
+
+glxgears &
+
+while (( "`xwininfo -root -tree|grep glxgears|sed "s/ /\n/g"|grep -v "^$"|wc -l`" == "0" )); do sleep 1; done
+while true; do
+    sudo chmod 777 socket
+    gst-launch-1.0 ximagesrc show-pointer=false use-damage=false xname="glxgears" ! $CONVERT ! $MIXERFORMAT ! $SHMSINK
+    sleep 3;
+done
+) > $LOGDIR/GST.log 2>&1 &
+
+(
+AUDIOFORMAT='audio/x-raw, format=S16LE, layout=interleaved, rate=48000, channels=2'
+while true; do
+    (
+    echo 'audio feed ctr isaudio 1\n'
+    gst-launch-1.0 -v audiotestsrc wave=12 is-live=true ! $AUDIOFORMAT ! fdsink fd=3 sync=true 3>&1 1>&2
+    ) | nc 127.0.0.1 9999
+done
+) > $LOGDIR/audio_src.log 2>&1 &
+
+(
+cd $SCRIPTSDIR/../build/GetEvents/
+date
+while (( "`xwininfo -root -tree|grep glxgears|sed "s/ /\n/g"|grep -v "^$"|wc -l`" == "0" )); do sleep 1; done
+while true; do
+    sudo chmod 777 socket
+    ./GetEvents ../AAServer/socket "glxgears"
+    sleep 3;
+done
+) > $LOGDIR/GetEvents.log 2>&1 &
+
+dmesg -w > $LOGDIR/dmesg.log 2>&1 &

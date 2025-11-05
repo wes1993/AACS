@@ -1,0 +1,21 @@
+#!/bin/bash
+rcLocalAlreadyUpdated=`cat /etc/rc.local |grep /start|wc -l`;
+ID=`whoami`;
+SCRIPTSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+HOMEDIR=`eval echo ~$ID`;
+if [[ "$rcLocalAlreadyUpdated" == "0" ]]; then
+    sed -i "2i$SCRIPTSDIR/start >> $HOMEDIR/logs/rc.local 2>&1 &" /etc/rc.local
+fi
+
+cat $SCRIPTSDIR/autologin.conf | sed "s/#USER#/$ID/" > /etc/lightdm/lightdm.conf.d/autologin.conf
+mkdir -p $HOMEDIR/.config/autostart/
+mkdir -p $HOMEDIR/logs/
+cat "$SCRIPTSDIR/aacs startx.desktop" | sed "s@#SCRIPTSDIR#@$SCRIPTSDIR@" > "$HOMEDIR/.config/autostart/aacs startx.desktop"
+cp -f "$SCRIPTSDIR/light-locker.desktop" "$HOMEDIR/.config/autostart/"
+echo -en "odroid\nodroid\nn\n"|vncpasswd
+echo "ID=$ID" > $SCRIPTSDIR/id
+mkdir -p $HOMEDIR/.config/xfce4/xfconf/xfce-perchannel-xml/
+cp -f $SCRIPTSDIR/xfce4-screensaver.xml $HOMEDIR/.config/xfce4/xfconf/xfce-perchannel-xml/
+ln -s $SCRIPTSDIR/base.ini $HOMEDIR/snowmix/
+MIXERFORMAT='video/x-raw,format=(string)BGRA,width=(int)800,height=(int)480,pixel-aspect-ratio=(fraction)1/1,interlaced=(boolean)false'
+gst-launch-1.0 -q -e videotestsrc num-buffers=1 pattern=10 ! $MIXERFORMAT ! filesink location=$HOMEDIR/snowmix/dead_frame.bgra

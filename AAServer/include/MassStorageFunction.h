@@ -1,0 +1,14 @@
+// Distributed under GPLv3 only as specified in repository's root LICENSE file
+
+#include "Function.h"
+#include <string>
+#pragma once
+
+class Gadget;
+
+class MassStorageFunction : public Function {
+  std::string lun_file;  // Store the file path to keep it valid
+public:
+  MassStorageFunction(const Gadget &gadget, const std::string &function_name,
+                      const std::string &lun);
+};
