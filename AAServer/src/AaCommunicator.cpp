@@ -1,6 +1,7 @@
 // Distributed under GPLv3 only as specified in repository's root LICENSE file
 
 #include "AaCommunicator.h"
+#include "AudioChannelHandler.h"
 #include "Channel.pb.h"
 #include "ChannelOpenRequest.pb.h"
 #include "Configuration.h"
@@ -110,12 +111,21 @@ void AaCommunicator::handleServiceDiscoveryResponse(const void *buf,
   sdr.ParseFromArray(buf, nbytes);
   std::cout << sdr.DebugString() << std::endl;
   for (auto ch : sdr.channels()) {
-    if (ch.has_media_channel() &&
-        ch.media_channel().media_type() ==
-            MediaStreamType_Enum::MediaStreamType_Enum_Video) {
+    if ((ch.has_media_channel() &&
+         ch.media_channel().media_type() ==
+             MediaStreamType_Enum::MediaStreamType_Enum_Video) ||
+        (ch.has_media_channel() &&
+         ch.media_channel().video_configs_size() > 0)) {
       channelTypeToChannelNumber[ChannelType::Video] = ch.channel_id();
       channelHandlers[ch.channel_id()] =
           new VideoChannelHandler(ch.channel_id());
+    } else if (ch.has_media_channel() &&
+               ch.media_channel().media_type() ==
+                   tag::aas::MediaStreamType_Enum::MediaStreamType_Enum_Audio &&
+               ch.media_channel().has_audio_type() &&
+               ch.media_channel().audio_type() == tag::aas::AudioType::Media) {
+      channelHandlers[ch.channel_id()] =
+          new AudioChannelHandler(ch.channel_id());
     } else if (ch.has_input_channel()) {
       channelTypeToChannelNumber[ChannelType::Input] = ch.channel_id();
       auto available_buttons = ch.input_channel().available_buttons();
@@ -244,8 +254,7 @@ void AaCommunicator::handleMessageContent(const Message &message) {
     cout << "got ping request" << endl;
     handlePingRequest(shortView + 1, msg.size() - sizeof(__u16));
   } else {
-    throw std::runtime_error("Unhandled message type: " +
-                             std::to_string(messageType));
+    cout << "Unhandled message type: " << std::to_string(messageType) << endl;
   }
 }
 
