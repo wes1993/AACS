@@ -110,9 +110,11 @@ void AaCommunicator::handleServiceDiscoveryResponse(const void *buf,
   sdr.ParseFromArray(buf, nbytes);
   std::cout << sdr.DebugString() << std::endl;
   for (auto ch : sdr.channels()) {
-    if (ch.has_media_channel() &&
-        ch.media_channel().media_type() ==
-            MediaStreamType_Enum::MediaStreamType_Enum_Video) {
+    if ((ch.has_media_channel() &&
+         ch.media_channel().media_type() ==
+             MediaStreamType_Enum::MediaStreamType_Enum_Video) ||
+        (ch.has_media_channel() &&
+         ch.media_channel().video_configs_size() > 0)) {
       channelTypeToChannelNumber[ChannelType::Video] = ch.channel_id();
       channelHandlers[ch.channel_id()] =
           new VideoChannelHandler(ch.channel_id());
