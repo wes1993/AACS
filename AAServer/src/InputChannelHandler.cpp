@@ -28,11 +28,11 @@ void InputChannelHandler::sendHandshakeRequest() {
        << endl;
   for (auto ab : available_buttons)
     handshakeRequest.add_available_buttons((tag::aas::ButtonCode_Enum)ab);
-  int bufSize = handshakeRequest.ByteSizeLong()
-  uint8_t buffer[bufSize];
-  if (!handshakeRequest.SerializeToArray(buffer, bufSize))
+  const int bufSize = handshakeRequest.ByteSizeLong();
+  std::vector<uint8_t> buffer(bufSize);
+  if (!handshakeRequest.SerializeToArray(buffer.data(), bufSize))
     throw aa_runtime_error("handshakeRequest.SerializeToArray failed");
-  copy(buffer, buffer + bufSize, std::back_inserter(plainMsg));
+  copy(buffer.begin(), buffer.end(), std::back_inserter(plainMsg));
   sendToHeadunit(channelId, FrameType::Bulk | EncryptionType::Encrypted,
                  plainMsg);
 }
