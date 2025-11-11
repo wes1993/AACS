@@ -258,7 +258,7 @@ void AaCommunicator::handlePingRequest(const void *buf, size_t nbytes) {
 
   tag::aas::PingResponse presp;
   presp.set_timestamp(preq.timestamp());
-  int bufSize = presp.ByteSize();
+  int bufSize = presp.ByteSizeLong();
   uint8_t buffer[bufSize];
   if (!presp.SerializeToArray(buffer, bufSize))
     throw aa_runtime_error("presp.SerializeToArray failed");
