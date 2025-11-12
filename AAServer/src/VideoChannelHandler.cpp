@@ -14,6 +14,11 @@
 #include <linux/types.h>
 #include <thread>
 
+#include <fstream>
+#include <string>
+#include <sstream>
+#include <filesystem>
+
 using namespace std;
 
 GstFlowReturn VideoChannelHandler::new_sample(GstElement *sink,
@@ -69,11 +74,56 @@ static void error_cb(GstBus *bus, GstMessage *msg, VideoChannelHandler *_this) {
   cout << "ERROR" << endl;
 }
 
+// Funzione helper per leggere (o creare) un file config
+int readConfigValue(const std::string& filename, const std::string& key, int defaultValue) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        // File non trovato → lo creo con i valori di default
+        std::ofstream newFile(filename);
+        if (newFile.is_open()) {
+            newFile << "WIDTH=800\n";
+            newFile << "HEIGHT=480\n";
+            newFile << "FRAMERATE_NUM=30\n";
+            newFile << "FRAMERATE_DEN=1\n";
+            newFile.close();
+            std::cout << "[INFO] Created default config file: " << filename << std::endl;
+        } else {
+            std::cerr << "[WARN] Could not create default config file: " << filename << std::endl;
+        }
+        return defaultValue;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.find(key + "=") == 0) {
+            try {
+                return std::stoi(line.substr(key.size() + 1));
+            } catch (...) {
+                std::cerr << "[WARN] Invalid value for " << key << " in " << filename
+                          << " — using default: " << defaultValue << std::endl;
+                return defaultValue;
+            }
+        }
+    }
+    return defaultValue;
+}
+
 VideoChannelHandler::VideoChannelHandler(uint8_t channelId)
     : ChannelHandler(channelId) {
-  cout << "VideoChannelHandler: " << (int)channelId << endl;
+  std::cout << "VideoChannelHandler: " << (int)channelId << std::endl;
   channelOpened = false;
 
+  // === Lettura dei parametri dal file video.conf ===
+  const std::string configFile = "video.conf"; // nella stessa dir di esecuzione
+  int width  = readConfigValue(configFile, "WIDTH", 1920);
+  int height = readConfigValue(configFile, "HEIGHT", 1080);
+  int framerate_num = readConfigValue(configFile, "FRAMERATE_NUM", 30);
+  int framerate_den = readConfigValue(configFile, "FRAMERATE_DEN", 1);
+
+  std::cout << "[INFO] Video config: " << width << "x" << height
+            << " @" << framerate_num << "/" << framerate_den << " fps" << std::endl;
+
+  // === Creazione pipeline GStreamer ===
   pipeline = gst_pipeline_new("main-pipeline");
 
   auto app_sink = gst_element_factory_make("appsink", "app_sink");
@@ -87,34 +137,45 @@ VideoChannelHandler::VideoChannelHandler(uint8_t channelId)
   auto x264enc = gst_element_factory_make("x264enc", "x264enc");
   g_object_set(x264enc, "speed-preset", 1, "key-int-max", 25, "aud", FALSE,
                "insert-vui", TRUE, NULL);
+
   auto h264caps = gst_caps_new_simple(
-      "video/x-h264", "stream-format", G_TYPE_STRING, "byte-stream", "profile",
-      G_TYPE_STRING, "baseline", "width", G_TYPE_INT, 1920, "height", G_TYPE_INT,
-      1080, "framerate", GST_TYPE_FRACTION, 30, 1, NULL);
-  auto capsfilter_h264 =
-      gst_element_factory_make("capsfilter", "capsfilter_h264");
+      "video/x-h264",
+      "stream-format", G_TYPE_STRING, "byte-stream",
+      "profile", G_TYPE_STRING, "baseline",
+      "width", G_TYPE_INT, width,
+      "height", G_TYPE_INT, height,
+      "framerate", GST_TYPE_FRACTION, framerate_num, framerate_den,
+      NULL);
+  auto capsfilter_h264 = gst_element_factory_make("capsfilter", "capsfilter_h264");
   g_object_set(capsfilter_h264, "caps", h264caps, NULL);
-  auto rawcaps =
-      gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, 1920, "height",
-                          G_TYPE_INT, 1080, "framerate", GST_TYPE_FRACTION, 30,
-                          1, "format", G_TYPE_STRING, "I420", NULL);
-  auto capsfilter_pre =
-      gst_element_factory_make("capsfilter", "capsfilter_pre");
+
+  auto rawcaps = gst_caps_new_simple(
+      "video/x-raw",
+      "width", G_TYPE_INT, width,
+      "height", G_TYPE_INT, height,
+      "framerate", GST_TYPE_FRACTION, framerate_num, framerate_den,
+      "format", G_TYPE_STRING, "I420",
+      NULL);
+  auto capsfilter_pre = gst_element_factory_make("capsfilter", "capsfilter_pre");
   g_object_set(capsfilter_pre, "caps", rawcaps, NULL);
 
   auto shmsrc = gst_element_factory_make("shmsrc", "shmsrc");
   g_object_set(G_OBJECT(shmsrc), "socket-path", "/tmp/aacs_mixer", NULL);
   g_object_set(G_OBJECT(shmsrc), "is-live", TRUE, NULL);
   g_object_set(G_OBJECT(shmsrc), "do-timestamp", TRUE, NULL);
+
   auto queue_snowmix = gst_element_factory_make("queue", "queue_snowmix");
   g_object_set(G_OBJECT(queue_snowmix), "leaky", 2, NULL);
   g_object_set(G_OBJECT(queue_snowmix), "max-size-buffers", 2, NULL);
-  auto snowmixcaps =
-      gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, 1920, "height",
-                          G_TYPE_INT, 1080, "framerate", GST_TYPE_FRACTION, 30,
-                          1, "format", G_TYPE_STRING, "BGRA", NULL);
-  auto capsfilter_snowmix =
-      gst_element_factory_make("capsfilter", "capsfilter_snowmix");
+
+  auto snowmixcaps = gst_caps_new_simple(
+      "video/x-raw",
+      "width", G_TYPE_INT, width,
+      "height", G_TYPE_INT, height,
+      "framerate", GST_TYPE_FRACTION, framerate_num, framerate_den,
+      "format", G_TYPE_STRING, "BGRA",
+      NULL);
+  auto capsfilter_snowmix = gst_element_factory_make("capsfilter", "capsfilter_snowmix");
   g_object_set(capsfilter_snowmix, "caps", snowmixcaps, NULL);
 
   gst_bin_add_many(GST_BIN(pipeline), shmsrc, queue_snowmix, capsfilter_snowmix,
@@ -125,6 +186,7 @@ VideoChannelHandler::VideoChannelHandler(uint8_t channelId)
                                  videoconvert, videoscale, videorate,
                                  capsfilter_pre, queue, x264enc,
                                  capsfilter_h264, app_sink, NULL));
+
   gst_caps_unref(h264caps);
   gst_caps_unref(rawcaps);
   gst_caps_unref(snowmixcaps);
