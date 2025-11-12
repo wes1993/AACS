@@ -89,14 +89,14 @@ VideoChannelHandler::VideoChannelHandler(uint8_t channelId)
                "insert-vui", TRUE, NULL);
   auto h264caps = gst_caps_new_simple(
       "video/x-h264", "stream-format", G_TYPE_STRING, "byte-stream", "profile",
-      G_TYPE_STRING, "baseline", "width", G_TYPE_INT, 800, "height", G_TYPE_INT,
-      480, "framerate", GST_TYPE_FRACTION, 30, 1, NULL);
+      G_TYPE_STRING, "baseline", "width", G_TYPE_INT, 1920, "height", G_TYPE_INT,
+      1080, "framerate", GST_TYPE_FRACTION, 30, 1, NULL);
   auto capsfilter_h264 =
       gst_element_factory_make("capsfilter", "capsfilter_h264");
   g_object_set(capsfilter_h264, "caps", h264caps, NULL);
   auto rawcaps =
-      gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, 800, "height",
-                          G_TYPE_INT, 480, "framerate", GST_TYPE_FRACTION, 30,
+      gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, 1920, "height",
+                          G_TYPE_INT, 1080, "framerate", GST_TYPE_FRACTION, 30,
                           1, "format", G_TYPE_STRING, "I420", NULL);
   auto capsfilter_pre =
       gst_element_factory_make("capsfilter", "capsfilter_pre");
@@ -110,8 +110,8 @@ VideoChannelHandler::VideoChannelHandler(uint8_t channelId)
   g_object_set(G_OBJECT(queue_snowmix), "leaky", 2, NULL);
   g_object_set(G_OBJECT(queue_snowmix), "max-size-buffers", 2, NULL);
   auto snowmixcaps =
-      gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, 800, "height",
-                          G_TYPE_INT, 480, "framerate", GST_TYPE_FRACTION, 30,
+      gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, 1920, "height",
+                          G_TYPE_INT, 1080, "framerate", GST_TYPE_FRACTION, 30,
                           1, "format", G_TYPE_STRING, "BGRA", NULL);
   auto capsfilter_snowmix =
       gst_element_factory_make("capsfilter", "capsfilter_snowmix");
