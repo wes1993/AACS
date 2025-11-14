@@ -24,7 +24,9 @@ AudioChannelHandler::AudioChannelHandler(uint8_t channelId)
     boost::asio::ip::tcp::endpoint endpoint(
         boost::asio::ip::address::from_string("127.0.0.1"), 9999);
     boost::asio::ip::tcp::socket socket(ios);
+    cout << "Tentativo connessione a Snowmix: 127.0.0.1:9999" << endl; // <-- DEBUG A
     socket.connect(endpoint);
+    cout << "Connessione a Snowmix Riuscita." << endl; // <-- DEBUG B
 
     string message = "audio sink ctr isaudio 1\n";
     boost::array<char, 8192> buf;
@@ -40,6 +42,12 @@ AudioChannelHandler::AudioChannelHandler(uint8_t channelId)
     for (auto i = 0;; i++) {
       auto len = boost::asio::read(
           socket, boost::asio::buffer(buf, samplesPerBuffer * 2 * 2), error);
+        // Controlla se la lettura ha successo o fallisce
+      if (error) {
+          cout << "ERRORE Lettura Snowmix: " << error.message() << endl; // <-- DEBUG C
+          break;
+      }
+      cout << "Letto Audio RAW. Lunghezza: " << len << " byte." << endl; // <-- DEBUG D
       cout << "." << flush;
       if (error)
         break;
@@ -50,6 +58,7 @@ AudioChannelHandler::AudioChannelHandler(uint8_t channelId)
       std::copy(buf.begin(), buf.end(), back_inserter(plainMsg));
       sendToHeadunit(this->channelId,
                      FrameType::Bulk | EncryptionType::Encrypted, plainMsg);
+      cout << "Audio Timestamp: " << startTimestamp + i * 1000 * samplesPerBuffer / 48 << endl; // <-- DEBUG E
     }
     socket.close();
   });
@@ -81,7 +90,9 @@ void AudioChannelHandler::sendSetupRequest() {
 
 void AudioChannelHandler::expectSetupResponse() {
   std::unique_lock<std::mutex> lk(m);
+  cout << "ASPETTANDO SetupResponse (gotSetupResponse=" << gotSetupResponse << ")" << endl; // <-- DEBUG F
   cv.wait(lk, [=] { return gotSetupResponse; });
+  cout << "SetupResponse RICEVUTA. Proseguo." << endl; // <-- DEBUG G
 }
 
 void AudioChannelHandler::sendStartIndication() {
@@ -113,8 +124,10 @@ bool AudioChannelHandler::handleMessageFromHeadunit(const Message &message) {
     auto messageType = be16_to_cpu(shortView[0]);
     if (messageType == MediaMessageType::SetupResponse) {
       gotSetupResponse = true;
+      cout << "RICEVUTO MESSAGGIO: SetupResponse. gotSetupResponse=true" << endl; // <-- DEBUG H
       messageHandled = true;
     } else if (messageType == MediaMessageType::MediaAckIndication) {
+      cout << "RICEVUTO MESSAGGIO: MediaAckIndication" << endl; // <-- DEBUG I
       messageHandled = true;
     }
   }
