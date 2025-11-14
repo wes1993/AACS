@@ -123,7 +123,8 @@ void AaCommunicator::handleServiceDiscoveryResponse(const void *buf,
                ch.media_channel().media_type() ==
                    tag::aas::MediaStreamType_Enum::MediaStreamType_Enum_Audio &&
                ch.media_channel().has_audio_type() &&
-               ch.media_channel().audio_type() == tag::aas::AudioType::Media) {
+               //ch.media_channel().audio_type() == tag::aas::AudioType::Media) {
+               ch.media_channel().audio_type() == tag::aas::AudioType::Speech) {
       channelHandlers[ch.channel_id()] =
           new AudioChannelHandler(ch.channel_id());
     } else if (ch.has_input_channel()) {
